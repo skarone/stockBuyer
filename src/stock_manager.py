@@ -4,6 +4,8 @@ from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 
 from stock import Stock
+from plotter import Plotter
+from settings import BLACK_LIST
 
 class StockManager(object):
     TICKERS_PATH = "/Users/ignacio/workspace/Projects/stockBuyer/data/tickers.json"
@@ -11,6 +13,8 @@ class StockManager(object):
         self._data = self.load()
         self._relaxed = []
         self._day = day
+        self._stocks = {}
+        self._gain = 0
 
     @property
     def tickers(self):
@@ -20,11 +24,17 @@ class StockManager(object):
     def sectors(self):
         return self._data.keys()
 
+    @property
+    def gain(self):
+        return self._gain
+
     def relaxedTickers(self):
         if self._relaxed:
             return self._relaxed
         for sector in self.sectors:
             for ticker in self._data[sector]:
+                if ticker in BLACK_LIST:
+                    continue
                 stock = Stock(ticker, sector)
                 try:
                     if stock.finishedRelax(self._day):
@@ -63,16 +73,29 @@ class StockManager(object):
             json.dump(sector_tickers, outfile)
         return sector_tickers
 
+    @property
+    def stocks(self):
+        return self._stocks
+
     def buy(self, start_time=None):
         for stock in self.relaxedTickers():
             # FIXME: This should search for current time.
-            bar = stock.findAction(self._day, start_time)
-            if bar:
-                self.sell(stock, bar)
-                break
+            try:
+                bar = stock.findAction(self._day, start_time)
+                if bar:
+                    self.sell(stock, bar)
+                    break
+            except:
+                print("FAILED BUYING", stock.name)
+                continue
 
     def sell(self, stock, start_bar):
         stopBar = stock.getStop(start_bar.index)
+        if not stock in self._stocks:
+            self._stocks[stock] = {"buy":[], "sell":[]}
+        self._stocks[stock]["buy"].append(start_bar)
+        self._stocks[stock]["sell"].append(stopBar)
+        self._gain += stock.gain
         # If market still open try to buy another time.
         if stopBar.date.hour <= 15:
             self.buy(stopBar.time)

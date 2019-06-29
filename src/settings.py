@@ -13,3 +13,13 @@ INVESTMENT = investment_after_conversion
 
 PERIOD = "1d"
 INTERVALS = "1m"
+SLOPE_DEGREE = 4
+BLACK_LIST = [
+    "SYMC",
+    "FCX",
+    "AMCR",
+    "KMI",
+    "HPQ",
+    "JEF",
+    "F"
+]

@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
 import pandas as pd
 import yfinance as yf
 import numpy as np
+import math
 
-from utils import prGreen, prRed, prYellow, prPurple, getGain
+from utils import prGreen, prRed, prYellow, prPurple, prCyan, getGain, getPreviousWeekDay
 from bar import Bar
-from settings import PERIOD, INTERVALS, INVESTMENT
+from settings import PERIOD, INTERVALS, INVESTMENT, SLOPE_DEGREE
 
 class Stock(object):
     """Class to handle Stock.
@@ -16,7 +17,6 @@ class Stock(object):
     RELAX_DEVIATION = 0.015
     START_TIME = "10:20"
     END_TIME = "14:00"
-    SLOPE_DEGREE = 4
     def __init__(self, name, sector=None):
         self._name = name
         self._sector = sector
@@ -24,6 +24,7 @@ class Stock(object):
         self._average_height = None
         self._inAction = None # If the stock was bought or sold.
         self._data = None
+        self._gain = 0
 
     @property
     def data(self):
@@ -31,7 +32,15 @@ class Stock(object):
 
     @property
     def inAction(self):
-        return self._inAction
+        if self._inAction == 1:
+            return "buy"
+        elif self._inAction == -1:
+            return "sell"
+        return None
+
+    @inAction.setter
+    def inAction(self, action):
+        self._inAction = action
 
     @property
     def sector(self):
@@ -49,6 +58,10 @@ class Stock(object):
     def average_volume(self):
         return self._average_volume
 
+    @property
+    def gain(self):
+        return self._gain
+
     def getDataPath(self, day, period=PERIOD, intervals=INTERVALS):
         return self.CSV_FOLDER.format(
             name=self.name, 
@@ -59,7 +72,7 @@ class Stock(object):
 
     def getData(self, day, tomorrow, period=PERIOD, intervals=INTERVALS, update=False):
         csv_path = self.getDataPath(day, period, intervals)
-        if os.path.exists(csv_path) and not update:
+        if os.path.exists(csv_path) and not date.today() == day:
             self._data = pd.read_csv(csv_path)
         else:
             ticker = yf.Ticker(self.name)
@@ -75,8 +88,8 @@ class Stock(object):
         if self.average_height is None:
             return []
         tomorrow = day + timedelta(days=1)
-        day = day.strftime("%Y-%m-%d")
-        tomorrow = tomorrow.strftime("%Y-%m-%d")
+        # day = day.strftime("%Y-%m-%d")
+        # tomorrow = tomorrow.strftime("%Y-%m-%d")
         data = self.getData(day, tomorrow, period, intervals, update=True)
         self._bars = [Bar(self.name, 
                 data.reset_index().iloc[[x]],
@@ -86,13 +99,9 @@ class Stock(object):
     def finishedRelax(self, day, period=PERIOD, intervals=INTERVALS):
         # Get previous day that is not a weekend
         yesterday = day - timedelta(days=1)
-        while True: 
-            weekno = yesterday.weekday()
-            if weekno<5:
-                break
-            yesterday = yesterday - timedelta(days=1)
-        day = day.strftime("%Y-%m-%d")
-        yesterday = yesterday.strftime("%Y-%m-%d")
+        yesterday = getPreviousWeekDay(yesterday)
+        # day = day.strftime("%Y-%m-%d")
+        # yesterday = yesterday.strftime("%Y-%m-%d")
         data = self.getData(yesterday, day, period, intervals)
         # Convert interval to int
         i_interval = int(intervals[:-1])
@@ -102,8 +111,8 @@ class Stock(object):
         self._average_height = data.loc[:,"Height"].mean()
         self._average_volume = data.loc[:,"Volume"].mean()
         if deviation < self.RELAX_DEVIATION:
-            print("Deviation:",self.name, deviation)
             return True
+        # FIXME: HACK!
         return False
 
     def getNow(self):
@@ -115,54 +124,105 @@ class Stock(object):
         self.getBars(day)
         if start_time is None:
             start_time = self.START_TIME
+        self._gain = 0
+        self.inAction = None
         for i, bar in enumerate(self._bars):
-            if bar.time < start_time:
+            if bar.time <= start_time:
                 continue
             if bar.time > self.END_TIME:
+                continue
+            if bar.height <= 0.01:
                 continue
             trend = self.getTrend(i)
             # Test
             first = self._bars[i - 1]
-            pinochio = bar.isPinochio(first, trend)
-            reversal = bar.isReversal(first, trend)
-            if pinochio or reversal:
+            second = self._bars[i - 2]
+            # if bar.isPinochio(first, trend):
+            #     return bar
+            # if bar.isExhaustion(first):
+            #     return bar
+            if bar.isTwoBarReversal(first):
+                if bar.isUp:
+                    self.inAction = 1
+                else:
+                    self.inAction = -1
                 return bar
+            # if bar.isReversal(first, trend):
+            #     return bar
+            # if bar.isThreeBarReversal(first, second):
+            #     return bar
         return False
 
-    def getTrend(self, index):
+    def getTrend(self, index, start_index=0, debug=False):
+        trend_values = self.getTrendCurve(index, start_index)
+        epsilon = 0.15
+        difference = trend_values[-1] - trend_values[-2]
+        angle = math.degrees(math.atan(difference))
+        if debug:
+            print("ANGLE", angle, difference)
+        if epsilon >= angle >= -epsilon:
+            return None
+        elif epsilon <= angle:
+            return True
+        elif angle <= -epsilon:
+            return False
+    
+    def getTrendCurve(self, index, start_index=0, debug=False):
         temp_hist = self._data.reset_index()
-        temp_hist = temp_hist.drop(["Datetime"], axis=1)
-        temp_hist = temp_hist.drop([0])
-        slopes = np.polyfit(temp_hist[0:index].index, temp_hist[0:index]["Close"], self.SLOPE_DEGREE)
-        trend_values = np.polyval(slopes, temp_hist[0:index].index)
-        return trend_values[-1] > trend_values[-2]
+        index = index+1
+        degree = SLOPE_DEGREE
+        diff_index = index - start_index
+        if diff_index < 3:
+            degree = 1
+        elif 3 < diff_index < 30:
+            degree = 2
+        if debug:
+            print("DEGREE", degree, len(temp_hist[start_index:index]))
+        slopes = np.polyfit(
+            temp_hist[start_index:index].index,
+            temp_hist[start_index:index]["Close"],
+            degree)
+        trend_values = np.polyval(slopes, temp_hist[start_index:index].index)
+        return trend_values
 
-    def getStop(self, index):
-        trend = self.getTrend(index)
+    def getStop(self, index, debug=False):
         buy_bar = self._bars[index]
+        if "reversal" in buy_bar.actionType:
+            trend = buy_bar.isUp
+        else:
+            trend = self.getTrend(index)
+
         for i, bar in enumerate(self._bars[index+1:]):
             ind = index + 1 + i
-            # slopes = np.polyfit(temp_hist[0:ind].index, temp_hist[0:ind]["Close"], degree)
-            # trend_values = np.polyval(slopes, temp_hist[0:ind].index)
-            # Trend True is going up
-            #print(len(trend_values), len(temp_hist[0:index]))
-            # b_trend = trend_values[-1] > trend_values[-2]
-            # if ind > 10:
-            # b_trend = trend_values[-1] > trend_values[-2]
-            # else:
-            #     # if first periods
-            # b_trend = bar.MA > bars[ind-1].MA
-            b_trend = self.getTrend(ind)
+            b_trend = self.getTrend(ind, index)
+            if b_trend is None:
+                continue
+            if b_trend != trend and i < 5:
+                if buy_bar.isUp and bar.low <= buy_bar.close:
+                    continue
+                if not buy_bar.isUp and bar.high >= buy_bar.close:
+                    continue
+            if debug:
+                prYellow("DEBUG_STOP", bar)
             if b_trend != trend:
                 if trend:
                     gain = getGain(INVESTMENT, buy_bar.close, bar.close)
                 else:
                     gain = getGain(INVESTMENT, bar.close, buy_bar.close)
-                prYellow("STOP!", bar, [b_trend, gain])
+                if gain > 0:
+                    prCyan("STOP!", bar, [b_trend, gain])
+                else:
+                    prRed("STOP!", bar, [b_trend, gain])
+                self._gain += gain
                 return bar
         if trend:
             gain = getGain(INVESTMENT, buy_bar.close, self._bars[-1].close)
         else:
             gain = getGain(INVESTMENT, self._bars[-1].close, buy_bar.close)
-        prPurple("USING LAST", self._bars[-1], [trend, gain])
+        if gain > 0:
+            prCyan("USING LAST", self._bars[-1], [trend, gain])
+        else:
+            prRed("USING LAST", self._bars[-1], [trend, gain])
+        # prPurple("USING LAST", self._bars[-1], [trend, gain])
+        self._gain += gain
         return self._bars[-1]

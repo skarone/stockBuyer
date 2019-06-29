@@ -1,4 +1,6 @@
 from settings import SPREAD_FEE
+from datetime import datetime, timedelta
+
 
 def prRed(message, bar, extra=[]): printf("\033[91m {}\033[00m", message, bar, extra) 
 def prGreen(message, bar, extra=[]): printf("\033[92m {}\033[00m", message, bar, extra) 
@@ -12,8 +14,9 @@ def prBlack(message, bar, extra=[]): printf("\033[98m {}\033[00m", message, bar,
 def printf(color, message, bar, extra=[]):
     msg = message
     msg += " "
-    msg += " ".join([str(s) for s in [bar.name, str(bar.date)[:-9], bar.close, bar.isUp, bar.height, bar.volume, bar.index]])
-    msg += " "
+    if bar:
+        msg += " ".join([str(s) for s in [bar.name, str(bar.date)[:-9], bar.close, bar.isUp, bar.height, bar.volume, bar.index]])
+        msg += " "
     msg += " ".join([str(s) for s in extra])
     print(color.format(msg))
 
@@ -29,3 +32,11 @@ def getGain(investment, stock_buy, stock_sell):
 
 def getPercent(value, percent):
     return value*percent/100.0
+
+def getPreviousWeekDay(day):
+    while True: 
+        weekno = day.weekday()
+        if weekno<5:
+            break
+        day = day - timedelta(days=1)
+    return day
