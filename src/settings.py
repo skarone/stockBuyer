@@ -21,5 +21,10 @@ BLACK_LIST = [
     "KMI",
     "HPQ",
     "JEF",
-    "F"
+    "F",
+    "NWS",
+    "FLT",
+    "HRS",
+    "WU",
+    "CNP"
 ]

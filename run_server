@@ -1,0 +1,2 @@
+./code-server -e ~/.vscode/extensions -p 8080 ~/workspace/Projects/stockBuyer --allow-http --disable-telemetry
+ssh -R 80:localhost:8080 ssh.localhost.run

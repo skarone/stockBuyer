@@ -132,6 +132,9 @@ class Plotter(object):
         trends = []
         start_index = 0
         for i,bar in enumerate(bars):
+            if (i % 2): # Sell Bar create also long curve.
+                _scatter = self._createTrendCurve(stock, bar, df, i, 0)
+                trends.append(_scatter)
             _scatter = self._createTrendCurve(stock, bar, df, i, start_index)
             if "reversal" in bar.actionType:
                 start_index = bar.index
@@ -142,8 +145,11 @@ class Plotter(object):
 
     def _createTrendCurve(self, stock, bar, df, i, start_index=0):
         distance = start_index - bar.index
+        if start_index == 0:
+            start_index = bar.index - 30
+        print("TREND FOR", stock.name, bar.index, start_index)
         trend_curve = stock.getTrendCurve(bar.index, start_index, debug=False)
-        # stock.getTrend(bar.index, start_index, debug=False)
+        stock.getTrend(bar.index, start_index, debug=True)
         # print(trend_curve[-2], trend_curve[-1])
         trend_curve_name = "{0}-{1}-{2}".format(distance, bar.actionType, bar.time)
         nones = np.array([np.nan for _ in range(len(df.Datetime)-len(trend_curve))])
@@ -151,15 +157,23 @@ class Plotter(object):
             front_nones = np.array([np.nan for _ in range(start_index)])
             trend_curve = np.concatenate((front_nones, trend_curve))
         trend_curve = np.concatenate((trend_curve, nones))
+        angles = self._createTrendAngles(trend_curve, stock)
         _scatter = dict(
             x=df.Datetime,
             y=trend_curve,
             name= trend_curve_name,
             line=scatter.Line(color=COLORS[i+30]),
             type='scatter',
-            yaxis='y2'
+            yaxis='y2',
+            text=angles
             )
         return _scatter
+
+    def _createTrendAngles(self, trend_curve, stock):
+        angles = []
+        for i, c in enumerate(trend_curve[1:]):
+            angles.append(stock.getAngle(c, trend_curve[i-1]))
+        return angles
 
     def create_plot(self, stocks_dict):
         for stock in stocks_dict:

@@ -85,8 +85,9 @@ class StockManager(object):
                 if bar:
                     self.sell(stock, bar)
                     break
-            except:
+            except Exception as e:
                 print("FAILED BUYING", stock.name)
+                print(e)
                 continue
 
     def sell(self, stock, start_bar):

@@ -1,5 +1,6 @@
 from settings import SPREAD_FEE
 from datetime import datetime, timedelta
+import holidays
 
 
 def prRed(message, bar, extra=[]): printf("\033[91m {}\033[00m", message, bar, extra) 
@@ -34,9 +35,10 @@ def getPercent(value, percent):
     return value*percent/100.0
 
 def getPreviousWeekDay(day):
+    us_holidays = holidays.US()
     while True: 
         weekno = day.weekday()
-        if weekno<5:
+        if weekno<5 and not day in us_holidays:
             break
         day = day - timedelta(days=1)
     return day

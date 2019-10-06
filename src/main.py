@@ -4,21 +4,30 @@ from datetime import date, timedelta
 from utils import getPreviousWeekDay, prPurple, prYellow
 from plotter import Plotter
 
-"""
-TOW BAR REVERSAL:
+"""TOW BAR REVERSAL:
 /2019/06/27/LKQ
 How to prevent this from happening?
 -13!!!!!! maldita sea.
+Buscando stop...
+Si tiene cola larga quiere decir que se opone a bajar o subir
 """
 
-def main(days=10):
+def main(days=1):
     today = date.today()
+    # today = today - timedelta(days=1)
+    # today = today - timedelta(days=1)
+    # today = today - timedelta(days=1)
     today = today - timedelta(days=1)
+    # today = today - timedelta(days=1)
+    today = today - timedelta(days=1)
+    # today = today - timedelta(days=1)
     # today = today - timedelta(days=1)
     plot = Plotter()
     total_gain = 0
     for i in range(days):
         today = getPreviousWeekDay(today)
+        if today.day == 4:
+            continue
         print(today, "-"*40)
         manager = StockManager(today)
         print("FOUND {0} STOCKS TO PLAY".format(len(manager.relaxedTickers())))

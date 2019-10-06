@@ -20,7 +20,7 @@ class Bar(object):
 
     def isShort(self, other=None):
         if other:
-            return self.absoluteHeight <= other.height / 1.5
+            return self.absoluteHeight <= other.height / 2.0
         # TODO: check with average better
         return self.average_height * self.height_difference / 1.5 >= self.height
 
@@ -215,14 +215,32 @@ class Bar(object):
                     return True
         return False
 
-    def isTwoBarReversal(self, first):
+    def isTwoBarReversal(self, first, second, third, trend):
         """The two-bar reversal pattern is made up of
         two strong bars closing in opposite directions.
         """
+        # None of the previous bars have big volume
+        if any([b.volume >= self.average_volume * 2 for b in [first, second, third]]):
+            return False
+        
+        # None of the previous bars can be higher than current
+        if any([self.height < b.height for b in [first, second, third]]):
+            return False
+
+        if trend != self.isUp:
+            return False
+        
         if (first.isTall() and self.isTall()) and (first.isUp != self.isUp):
-            prGreen("TwoBarReversal", self)
-            self._actionType = "two_bar_reversal"
-            return True
+            if self.isUp and self.open >= first.close and self.height >= first.height:
+                if self.isBarSequenceDown([first, second, third]):
+                    prGreen("TwoBarReversal - 1", self)
+                    self._actionType = "two_bar_reversal"
+                    return True
+            elif not self.isUp and self.open <= first.close and self.height >= first.height:
+                if self.isBarSequenceUp([first, second, third]):
+                    prGreen("TwoBarReversal - 2", self)
+                    self._actionType = "two_bar_reversal"
+                    return True
         return False
 
     def isThreeBarReversal(self, first, second):
@@ -244,8 +262,6 @@ class Bar(object):
         """
         if self.isUp == second.isUp:
             return False
-        if self.isUp == first.isUp:
-            return False
         if first.isUp != second.isUp:
             return False
         if self.isUp:
@@ -262,9 +278,23 @@ class Bar(object):
                     return True
         return False
 
-
     def isThreeBarPullBack(self, first, second, third):
-        pass
+        if not self.isTall():
+            return False
+        if any([not b.isShort(self) for b in [first, second, third]]):
+            return False
+        if self.isUp and all([not b.isUp for b in [first, second, third]]):
+            # Los lows no pueden ser menores que self.
+            if all([self.low < b.low for b in [first, second, third]]):
+                prGreen("ThreePullback - 1", self)
+                self._actionType = "three_reversal_pullback"
+                return True
+        if not self.isUp and all([b.isUp for b in [first, second, third]]):
+            if all([self.high > b.high for b in [first, second, third]]):
+                prGreen("ThreePullback - 2", self)
+                self._actionType = "three_reversal_pullback"
+                return True
+        return False
 
     def isInside(self, first):
         pass
@@ -272,6 +302,19 @@ class Bar(object):
     def isOutside(self, first):
         pass
     ################################ 
+
+    def isBarSequenceDown(self, bars):
+        return self.barSequenceTrend(bars, False)
+
+    def isBarSequenceUp(self, bars):
+        return self.barSequenceTrend(bars, True)
+
+    def barSequenceTrend(self, bars, reversed):
+        return bars == sorted(
+            bars, 
+            key=lambda x: x.close,
+            reverse=reversed
+        )
 
     def isThreeBar(self, first, second, third):
         # 1 means is threebar

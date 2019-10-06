@@ -6,3 +6,12 @@ plotly
 pandas
 yfinance
 beautifulsoup4
+holidays
+ipywidgets
+pandas-datareader
+rdp
+pymongo
+tweepy
+scipy
+textblob
+# git+https://github.com/poojathakoor/twitter-stock-sentiment.git
